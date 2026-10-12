@@ -268,12 +268,6 @@
   border-bottom: 1px solid var(--border-subtle);
 }
 
-/* The panel scrolls as one document, so the context panel only needs its own
-   cap while a virtualized Turn list owns the viewport. */
-.detail-body:has(.turn-list[data-virtualized="true"]) .detail-context-components {
-  max-height: min(42vh, 480px);
-}
-
 .detail-context-components-toggle {
   display: inline-flex;
   align-items: center;
@@ -1509,6 +1503,15 @@
 
 /* Long Turn lists own their viewport; toolbar/find controls stay outside it. */
 .detail-body:has(.turn-list[data-virtualized="true"]) { display: flex; flex-direction: column; overflow: hidden; }
+/* Keep the metadata above the list in a bounded, scrollable block so a long AI
+   summary or context panel cannot squeeze the Turn list to a sliver. */
+.detail-body:has(.turn-list[data-virtualized="true"]) > .detail-body-chrome {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 50%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 .turn-conversation:has(.turn-list[data-virtualized="true"]) { display: flex; flex: 1; flex-direction: column; min-height: 0; }
 .turn-list[data-virtualized="true"] { display: block; min-height: 0; flex: 1; overflow-y: auto; overflow-anchor: none; }
 .turn-list-row { display: grid; gap: 7px; }

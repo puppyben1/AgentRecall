@@ -743,6 +743,7 @@ export function DetailPanel({
             </button>
           </div>
         </div>
+        <div className="detail-body-chrome">
         {(session.runtimeInvocations?.length ?? 0) > 0 ? (
           <section className="runtime-invocation-history" aria-label={l("AgentRecall invocation history", "AgentRecall 调用记录")}>
             <div className="runtime-invocation-history-title">
@@ -991,6 +992,7 @@ export function DetailPanel({
               </button>
             </div>
           ) : null}
+        </div>
           {turns !== null ? (
             <section className="conversation turn-conversation">
               <TurnAccordion
