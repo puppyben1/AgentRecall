@@ -59,6 +59,24 @@ import {
 } from "../../session-ui";
 import type { UsageDelta } from "../../session-ui";
 
+// Rendered while usage is being collected, or while it belongs to a previous period.
+const EMPTY_USAGE_STATS: SessionStats = {
+  total: {
+    sessionCount: 0,
+    messageCount: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    cachedInputTokens: 0,
+    cacheCreationInputTokens: 0,
+    reasoningOutputTokens: 0,
+    totalTokens: 0,
+  },
+  bySource: [],
+  dailyTokenUsage: [],
+  previousTotal: null,
+  range: { period: "today", since: null, until: 0 },
+};
+
 const PERIODS: SessionStatsPeriod[] = ["today", "sevenDay", "thirtyDay", "allTime"];
 const WORKBENCH_CARD_ORDER_STORAGE_KEY = "agent-recall.workbench-card-order.v2";
 
@@ -121,7 +139,7 @@ function loadWorkbenchCardOrder(): WorkbenchCardId[] {
 }
 
 export interface WorkbenchPageProps {
-  stats: SessionStats;
+  stats: SessionStats | null;
   statsPeriod: SessionStatsPeriod;
   statsRefreshing: boolean;
   statsFeedback: StatsFeedback;
@@ -212,33 +230,37 @@ export function WorkbenchPage({
   onShowSkills,
 }: WorkbenchPageProps): ReactElement {
   const l = (en: string, zh: string) => localize(language, en, zh);
-  const sourceRows = usageStatsDisplayRows(stats.bySource);
-  const cacheRate = usageCacheRate(stats.total);
-  const previousTotal = stats.previousTotal;
+  // Numbers collected for another period must not be labelled with the selected one.
+  const usageFailed = statsFeedback?.kind === "error" && (stats === null || stats.range.period !== statsPeriod);
+  const usageLoading = !usageFailed && (stats === null || stats.range.period !== statsPeriod);
+  const usage = stats ?? EMPTY_USAGE_STATS;
+  const sourceRows = usageLoading || usageFailed ? [] : usageStatsDisplayRows(usage.bySource);
+  const cacheRate = usageLoading || usageFailed ? null : usageCacheRate(usage.total);
+  const previousTotal = usageLoading || usageFailed ? null : usage.previousTotal;
   const tokenParts: Array<{ key: string; label: string; value: number; delta: UsageDelta | null }> = [
     {
       key: "input",
       label: l("Input", "新增输入"),
-      value: stats.total.inputTokens,
-      delta: usageDelta(stats.total.inputTokens, previousTotal?.inputTokens ?? null),
+      value: usage.total.inputTokens,
+      delta: usageDelta(usage.total.inputTokens, previousTotal?.inputTokens ?? null),
     },
     {
       key: "output",
       label: "Output",
-      value: stats.total.outputTokens,
-      delta: usageDelta(stats.total.outputTokens, previousTotal?.outputTokens ?? null),
+      value: usage.total.outputTokens,
+      delta: usageDelta(usage.total.outputTokens, previousTotal?.outputTokens ?? null),
     },
     {
       key: "cache-write",
       label: l("Cache write", "创建"),
-      value: stats.total.cacheCreationInputTokens ?? 0,
-      delta: usageDelta(stats.total.cacheCreationInputTokens ?? 0, previousTotal ? previousTotal.cacheCreationInputTokens ?? 0 : null),
+      value: usage.total.cacheCreationInputTokens ?? 0,
+      delta: usageDelta(usage.total.cacheCreationInputTokens ?? 0, previousTotal ? previousTotal.cacheCreationInputTokens ?? 0 : null),
     },
     {
       key: "cache-read",
       label: l("Cache read", "命中"),
-      value: stats.total.cachedInputTokens,
-      delta: usageDelta(stats.total.cachedInputTokens, previousTotal?.cachedInputTokens ?? null),
+      value: usage.total.cachedInputTokens,
+      delta: usageDelta(usage.total.cachedInputTokens, previousTotal?.cachedInputTokens ?? null),
     },
   ];
   const visibleSessions = sessionQuery.trim()
@@ -372,9 +394,9 @@ export function WorkbenchPage({
             </div>
           </div>
           <div className="usage-metrics">
-            <UsageMetric value={formatCompactNumber(stats.total.sessionCount)} label={l("Sessions", "会话")} />
-            <UsageMetric value={formatCompactNumber(stats.total.messageCount)} label={l("Messages", "消息")} />
-            <UsageMetric value={formatTokenCount(stats.total.totalTokens)} label="Token" />
+            <UsageMetric value={usageLoading || usageFailed ? "—" : formatCompactNumber(usage.total.sessionCount)} label={l("Sessions", "会话")} />
+            <UsageMetric value={usageLoading || usageFailed ? "—" : formatCompactNumber(usage.total.messageCount)} label={l("Messages", "消息")} />
+            <UsageMetric value={usageLoading || usageFailed ? "—" : formatTokenCount(usage.total.totalTokens)} label="Token" />
           </div>
           <div className="workbench-usage-breakdown" aria-label={l("Token breakdown", "Token 明细")}>
             <div className="workbench-token-parts">
@@ -382,7 +404,7 @@ export function WorkbenchPage({
                 <div key={part.key} className={`workbench-token-part ${part.key}`}>
                   <span>{part.label}</span>
                   <span className="workbench-token-value">
-                    <strong>{formatTokenCount(part.value)}</strong>
+                    <strong>{usageLoading || usageFailed ? "—" : formatTokenCount(part.value)}</strong>
                     {part.delta && part.delta.kind !== "flat" ? (
                       <em className={`workbench-token-delta is-${part.delta.kind}`}>{formatUsageDelta(part.delta)}</em>
                     ) : null}
@@ -408,7 +430,11 @@ export function WorkbenchPage({
               <div key={row.key} className="workbench-source-row" data-source={row.key}>
                 <span><i />{row.label}</span><strong>{formatTokenCount(row.totalTokens)}</strong>
               </div>
-            )) : <span className="workbench-source-empty">{l("No source data", "暂无来源数据")}</span>}
+            )) : <span className="workbench-source-empty">{usageLoading
+              ? l("Collecting usage...", "正在统计…")
+              : usageFailed
+                ? l("Usage unavailable. Try again.", "用量不可用，请重试。")
+                : l("No source data", "暂无来源数据")}</span>}
           </div>
           {statsFeedback ? <p className={`workbench-feedback ${statsFeedback.kind}`}>{statsFeedback.message}</p> : null}
         </div>
@@ -441,7 +467,7 @@ export function WorkbenchPage({
           {quotaFeedback ? <p className={`workbench-feedback quota ${quotaFeedback.kind}`}>{quotaFeedback.message}</p> : null}
         </section>
 
-        <TokenTrendChart points={stats.dailyTokenUsage} language={language} onSelectDay={onSelectTrendDay} />
+        <TokenTrendChart points={usage.dailyTokenUsage} language={language} onSelectDay={onSelectTrendDay} />
         </section>
 
         <div className={`workbench-primary-grid ${layoutEditing ? "is-editing" : ""}`} role="region" aria-label={l("Continue work", "继续工作")}>
