@@ -210,6 +210,9 @@ describe("DetailPanel Turn controls", () => {
       expect(container.querySelector(".panel-search-input")).not.toBeNull();
     });
     expect(document.activeElement).toBe(container.querySelector(".panel-search-input"));
+    const searchBar = container.querySelector(".panel-search-bar");
+    expect(searchBar?.parentElement?.classList.contains("detail-header")).toBe(true);
+    expect(searchBar?.closest(".detail-body-chrome")).toBeNull();
   });
 
   it("keeps an existing CodeWiz summary visible without offering summary actions", async () => {

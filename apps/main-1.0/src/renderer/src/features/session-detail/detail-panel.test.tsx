@@ -108,6 +108,23 @@ describe("DetailPanel Code Mode tool groups", () => {
     });
   }
 
+  it("keeps in-conversation find in the sticky header while detail content scrolls", async () => {
+    await renderTraceEvents([]);
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "f",
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      }));
+    });
+
+    const searchBar = container.querySelector(".panel-search-bar");
+    expect(searchBar).not.toBeNull();
+    expect(searchBar?.parentElement?.classList.contains("detail-header")).toBe(true);
+    expect(searchBar?.closest(".detail-body")).not.toBeNull();
+  });
+
   it("keeps an existing CodeWiz summary visible without offering a summary action", async () => {
     await renderTraceEvents([], {
       sessionKey: "codewiz:existing-summary",
