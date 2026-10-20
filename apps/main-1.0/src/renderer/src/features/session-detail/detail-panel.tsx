@@ -450,7 +450,9 @@ export function DetailPanel({
       }
 
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "BUTTON") return;
-      const page = el.clientHeight * 0.9;
+      const headerBottom = el.querySelector(".detail-header")?.getBoundingClientRect().bottom ?? 0;
+      const obscuredHeight = Math.min(el.clientHeight, Math.max(0, headerBottom - el.getBoundingClientRect().top - el.clientTop));
+      const page = (el.clientHeight - obscuredHeight) * 0.9;
       switch (event.key) {
         case "Escape":
           if (panelSearchOpen) {

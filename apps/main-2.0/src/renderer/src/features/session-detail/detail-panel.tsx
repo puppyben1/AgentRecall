@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactElement } from "react";
 import { ArrowRightLeft, ChevronDown, ChevronUp, CloudUpload, Container, Copy, CornerUpLeft, Download, Edit3, Eye, EyeOff, FolderOpen, Laptop, Paperclip, Play, Search, Server, Sparkles, Star, Tag, Terminal as TerminalIcon, Trash2, X } from "lucide-react";
 import { formatMessageTime } from "../../../../core/format-session";
@@ -370,6 +371,7 @@ export function DetailPanel({
   const [detailWidth, setDetailWidth] = useState(readStoredDetailWidth);
   const [resizing, setResizing] = useState(false);
   const exportMarkdownMenuRef = useRef<HTMLDivElement>(null);
+  const exportMarkdownOptionsRef = useRef<HTMLDivElement>(null);
   const pendingInitialScrollRef = useRef<string | null>(session.sessionKey);
   const [roleFilter, setRoleFilter] = useState<ConversationRoleFilter>("all");
   const [showTools, setShowTools] = useState(readInitialToolEventsVisibility);
@@ -382,23 +384,51 @@ export function DetailPanel({
     [roleFilter, showTools, timelineItems],
   );
 
+  useLayoutEffect(() => {
+    if (!exportMarkdownMenuOpen) return;
+    const menu = exportMarkdownOptionsRef.current;
+    const anchor = exportMarkdownMenuRef.current;
+    if (!menu || !anchor) return;
+    const rect = anchor.getBoundingClientRect();
+    const { width, height } = menu.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))}px`;
+    const top = rect.bottom + 6 + height <= window.innerHeight - 8 ? rect.bottom + 6 : rect.top - height - 6;
+    menu.style.top = `${Math.max(8, Math.min(top, window.innerHeight - height - 8))}px`;
+    menu.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true });
+  }, [exportMarkdownMenuOpen]);
+
   useEffect(() => {
     if (!exportMarkdownMenuOpen) return;
-    const closeMenu = (event: MouseEvent): void => {
-      if (!exportMarkdownMenuRef.current?.contains(event.target as Node)) {
+    const closeMenu = (event: MouseEvent | FocusEvent): void => {
+      if (!exportMarkdownMenuRef.current?.contains(event.target as Node)
+        && !exportMarkdownOptionsRef.current?.contains(event.target as Node)) {
         setExportMarkdownMenuOpen(false);
       }
     };
     const closeOnEscape = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") setExportMarkdownMenuOpen(false);
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setExportMarkdownMenuOpen(false);
+        exportMarkdownMenuRef.current?.querySelector("button")?.focus({ preventScroll: true });
+      }
     };
+    // Dismiss rather than leave the menu attached to a stale, possibly clipped anchor.
+    const closeOnLayoutChange = (): void => setExportMarkdownMenuOpen(false);
     document.addEventListener("mousedown", closeMenu);
+    document.addEventListener("focusin", closeMenu);
     document.addEventListener("keydown", closeOnEscape);
+    window.addEventListener("scroll", closeOnLayoutChange, true);
+    window.addEventListener("resize", closeOnLayoutChange);
     return () => {
       document.removeEventListener("mousedown", closeMenu);
+      document.removeEventListener("focusin", closeMenu);
       document.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("scroll", closeOnLayoutChange, true);
+      window.removeEventListener("resize", closeOnLayoutChange);
     };
   }, [exportMarkdownMenuOpen]);
+
+  useEffect(() => setExportMarkdownMenuOpen(false), [detailWidth]);
 
   useEffect(() => setExportMarkdownMenuOpen(false), [session.sessionKey]);
   useEffect(() => setShowAllInvocationOwners(false), [session.sessionKey]);
@@ -623,7 +653,9 @@ export function DetailPanel({
       }
 
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "BUTTON") return;
-      const page = el.clientHeight * 0.9;
+      const headerBottom = el.querySelector(".detail-header")?.getBoundingClientRect().bottom ?? 0;
+      const obscuredHeight = Math.min(el.clientHeight, Math.max(0, headerBottom - el.getBoundingClientRect().top - el.clientTop));
+      const page = (el.clientHeight - obscuredHeight) * 0.9;
       switch (event.key) {
         case "Escape":
           if (panelSearchOpen) {
@@ -885,10 +917,31 @@ export function DetailPanel({
                 >
                   <Download size={15} /> {l("Export MD", "导出 MD")} <ChevronDown size={13} />
                 </button>
-                {exportMarkdownMenuOpen ? (
-                  <div className="export-markdown-options" role="menu">
+                {/* Keep theme/overlay ownership while escaping the metadata scroller. */}
+                {exportMarkdownMenuOpen && detailRef.current ? createPortal(
+                  <div className="export-markdown-options" role="menu" aria-label={l("Export Markdown", "导出 Markdown")} ref={exportMarkdownOptionsRef}
+                    onKeyDown={(event) => {
+                      if (event.key === "Tab") {
+                        event.preventDefault();
+                        setExportMarkdownMenuOpen(false);
+                        const anchor = exportMarkdownMenuRef.current;
+                        const target = event.shiftKey ? anchor?.querySelector("button") : anchor?.nextElementSibling;
+                        if (target instanceof HTMLElement) target.focus({ preventScroll: true });
+                        return;
+                      }
+                      const items = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("button")];
+                      const index = items.indexOf(document.activeElement as HTMLButtonElement);
+                      const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1
+                        : event.key === "ArrowDown" ? (index + 1) % items.length
+                          : event.key === "ArrowUp" ? (index + items.length - 1) % items.length : null;
+                      if (next !== null) {
+                        event.preventDefault();
+                        items[next]?.focus();
+                      }
+                    }}>
                     <button role="menuitem" onClick={() => {
                       setExportMarkdownMenuOpen(false);
+                      exportMarkdownMenuRef.current?.querySelector("button")?.focus({ preventScroll: true });
                       onExportMarkdown(false);
                     }}>
                       {l("Conversation only", "仅导出会话内容")}
@@ -896,12 +949,14 @@ export function DetailPanel({
                     </button>
                     <button role="menuitem" onClick={() => {
                       setExportMarkdownMenuOpen(false);
+                      exportMarkdownMenuRef.current?.querySelector("button")?.focus({ preventScroll: true });
                       onExportMarkdown(true);
                     }}>
                       {l("Complete record", "导出完整记录")}
                       <small>{l("Include Tool Trace", "包含 Tool Trace")}</small>
                     </button>
-                  </div>
+                  </div>,
+                  detailRef.current,
                 ) : null}
               </div>
               <button onClick={onExportJson} disabled={actionRunning}>
