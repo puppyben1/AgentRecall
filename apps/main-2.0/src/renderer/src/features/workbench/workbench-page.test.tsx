@@ -90,3 +90,19 @@ it("reports pending usage instead of zero before the first statistics arrive", (
   expect(failed).toContain("Usage unavailable. Try again.");
   expect(failed).not.toContain("Collecting usage...");
 });
+
+it.each([null, {
+  ...usageStats,
+  total: { ...usageStats.total, sessionCount: 7, messageCount: 20, totalTokens: 150 },
+  range: { period: "sevenDay" as const, since: null, until: 0 },
+}])("keeps unmeasured metrics unavailable after a statistics failure (%j)", (stats) => {
+  const html = renderToStaticMarkup(<WorkbenchPage {...workbenchProps({
+    stats,
+    statsFeedback: { kind: "error", message: "statistics failed" },
+  })} />);
+  expect(html).toContain("Usage unavailable. Try again.");
+  expect(html).not.toContain("Collecting usage...");
+  for (const label of ["Sessions", "Messages", "Token"]) {
+    expect(html).toContain(`aria-label="${label}: —"`);
+  }
+});

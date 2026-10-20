@@ -362,9 +362,9 @@ export function WorkbenchPage({
             </div>
           </div>
           <div className="usage-metrics">
-            <UsageMetric value={usageLoading ? "—" : formatCompactNumber(usage.total.sessionCount)} label={l("Sessions", "会话")} />
-            <UsageMetric value={usageLoading ? "—" : formatCompactNumber(usage.total.messageCount)} label={l("Messages", "消息")} />
-            <UsageMetric value={usageLoading ? "—" : formatTokenCount(usage.total.totalTokens)} label="Token" />
+            <UsageMetric value={usageLoading || usageFailed ? "—" : formatCompactNumber(usage.total.sessionCount)} label={l("Sessions", "会话")} />
+            <UsageMetric value={usageLoading || usageFailed ? "—" : formatCompactNumber(usage.total.messageCount)} label={l("Messages", "消息")} />
+            <UsageMetric value={usageLoading || usageFailed ? "—" : formatTokenCount(usage.total.totalTokens)} label="Token" />
           </div>
           <div className="workbench-source-usage" aria-label={l("Token usage by Agent", "按 Agent 查看 Token 用量")}>
             {sourceRows.length > 0 ? sourceRows.map((row) => (
