@@ -1,26 +1,47 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { WorkbenchPage, normalizeWorkbenchCardOrder, reorderWorkbenchCard, type WorkbenchPageProps } from "./workbench-page";
+import type { SessionStats } from "../../../../core/types";
+
+const usageStats: SessionStats = {
+  total: {
+    sessionCount: 0,
+    messageCount: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    cachedInputTokens: 0,
+    reasoningOutputTokens: 0,
+    totalTokens: 0,
+  },
+  bySource: [],
+  dailyTokenUsage: [],
+  previousTotal: null,
+  range: { period: "today", since: null, until: 0 },
+};
+
+function workbenchProps(overrides: Partial<WorkbenchPageProps> = {}): WorkbenchPageProps {
+  const noop = vi.fn();
+  return {
+    stats: usageStats,
+    statsPeriod: "today", statsRefreshing: false, statsFeedback: null,
+    quotas: { generatedAt: "2026-09-20T00:00:00Z", providers: [] }, quotaLoading: false, quotaFeedback: null,
+    sessions: [], sessionQuery: "", liveSessionKeys: new Set(), liveDetectionFailed: false,
+    platform: "darwin", language: "en", workflows: [], workflowTotalCount: 0, activeWorkflowCount: 0,
+    workflowsLoading: false, workflowsError: "Workflow needs attention", runtimes: [], runtimeChannels: [],
+    runtimeOverviewAvailable: true, mcpServers: [], memoryEnabled: false,
+    memorySnapshot: null, memoryLoading: false, skills: [], skillsLoading: false,
+    onStatsPeriodChange: noop, onRefreshStats: noop, onRefreshQuotas: noop,
+    onOpenSettings: noop, onSearchSessions: noop, onOpenSession: noop, onResumeSession: noop,
+    onShowSessions: noop, onSelectTrendDay: noop, onOpenWorkflow: noop, onNewWorkflow: noop,
+    onShowWorkflows: noop, onShowRuntimes: noop, onShowMcp: noop,
+    onShowMemories: noop, onShowSkills: noop,
+    ...overrides,
+  };
+}
 
 describe("workbench overview and work entries", () => {
   it("places the overview above work without losing task entries or failure feedback", () => {
-    const noop = vi.fn();
-    const props: WorkbenchPageProps = {
-      stats: { total: { sessionCount: 0, messageCount: 0, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, reasoningOutputTokens: 0, totalTokens: 0 },
-        bySource: [], dailyTokenUsage: [], range: { period: "today", since: null, until: 0 }, previousTotal: null },
-      statsPeriod: "today", statsRefreshing: false, statsFeedback: null,
-      quotas: { generatedAt: "2026-09-20T00:00:00Z", providers: [] }, quotaLoading: false, quotaFeedback: null,
-      sessions: [], sessionQuery: "", liveSessionKeys: new Set(), liveDetectionFailed: false,
-      platform: "darwin", language: "en", workflows: [], workflowTotalCount: 0, activeWorkflowCount: 0,
-      workflowsLoading: false, workflowsError: "Workflow needs attention", runtimes: [], runtimeChannels: [],
-      runtimeOverviewAvailable: true, mcpServers: [], memoryEnabled: false,
-      memorySnapshot: null, memoryLoading: false, skills: [], skillsLoading: false,
-      onStatsPeriodChange: noop, onRefreshStats: noop, onRefreshQuotas: noop,
-      onOpenSettings: noop, onSearchSessions: noop, onOpenSession: noop, onResumeSession: noop,
-      onShowSessions: noop, onSelectTrendDay: noop, onOpenWorkflow: noop, onNewWorkflow: noop,
-      onShowWorkflows: noop, onShowRuntimes: noop, onShowMcp: noop,
-      onShowMemories: noop, onShowSkills: noop,
-    };
+    const props = workbenchProps();
     const html = renderToStaticMarkup(<WorkbenchPage {...props} />);
     expect(html.indexOf("workbench-overview")).toBeLessThan(html.indexOf("workbench-primary-grid"));
     expect(html).toContain('aria-label="Continue work"');
@@ -48,4 +69,40 @@ describe("workbench overview and work entries", () => {
 it("drops the retired Chat card while preserving other saved positions", () => {
   expect(normalizeWorkbenchCardOrder(["skills", "chat", "sessions", "workflows", "memories", "runtimes", "mcp"]))
     .toEqual(["skills", "sessions", "workflows", "memories", "runtimes", "mcp"]);
+});
+
+it("reports pending usage instead of zero before the first statistics arrive", () => {
+  const pending = renderToStaticMarkup(<WorkbenchPage {...workbenchProps({ stats: null })} />);
+  expect(pending).toContain("Collecting usage...");
+  expect(pending).not.toContain("No source data");
+  expect(pending).toContain('aria-label="Sessions: —"');
+
+  const stale = renderToStaticMarkup(<WorkbenchPage {...workbenchProps({
+    stats: { ...usageStats, bySource: [{ ...usageStats.total, source: "codex-cli", totalTokens: 1234 }], range: { period: "sevenDay", since: null, until: 0 } },
+  })} />);
+  expect(stale).toContain("Collecting usage...");
+  expect(stale).not.toContain('data-source="codex-cli"');
+
+  const failed = renderToStaticMarkup(<WorkbenchPage {...workbenchProps({
+    stats: null,
+    statsFeedback: { kind: "error", message: "statistics failed" },
+  })} />);
+  expect(failed).toContain("Usage unavailable. Try again.");
+  expect(failed).not.toContain("Collecting usage...");
+});
+
+it.each([null, {
+  ...usageStats,
+  total: { ...usageStats.total, sessionCount: 7, messageCount: 20, totalTokens: 150 },
+  range: { period: "sevenDay" as const, since: null, until: 0 },
+}])("keeps unmeasured metrics unavailable after a statistics failure (%j)", (stats) => {
+  const html = renderToStaticMarkup(<WorkbenchPage {...workbenchProps({
+    stats,
+    statsFeedback: { kind: "error", message: "statistics failed" },
+  })} />);
+  expect(html).toContain("Usage unavailable. Try again.");
+  expect(html).not.toContain("Collecting usage...");
+  for (const label of ["Sessions", "Messages", "Token"]) {
+    expect(html).toContain(`aria-label="${label}: —"`);
+  }
 });
