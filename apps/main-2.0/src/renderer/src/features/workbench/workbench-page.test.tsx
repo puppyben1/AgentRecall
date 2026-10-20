@@ -47,6 +47,16 @@ describe("workbench overview and work entries", () => {
     expect(compared).toContain("+100%");
     expect(compared).toContain("+200%");
     expect(compared.match(/workbench-token-delta/g)).toHaveLength(2);
+    props.stats.total.cacheCreationInputTokens = 100;
+    delete props.stats.previousTotal.cacheCreationInputTokens;
+    const newCacheWrites = renderToStaticMarkup(<WorkbenchPage {...props} />);
+    expect(newCacheWrites).toContain('class="workbench-token-delta is-new">NEW</em>');
+    expect(newCacheWrites.match(/workbench-token-delta/g)).toHaveLength(3);
+    props.stats.previousTotal = null;
+    props.statsPeriod = "allTime";
+    props.stats.range.period = "allTime";
+    const noComparison = renderToStaticMarkup(<WorkbenchPage {...props} />);
+    expect(noComparison).not.toContain("workbench-token-delta");
     props.quotas.providers = [{ provider: "codex", displayName: "Codex", status: "not_configured", quotas: [], detail: "Existing quota guidance" }];
     props.quotaLoading = true;
     const refreshing = renderToStaticMarkup(<WorkbenchPage {...props} />);

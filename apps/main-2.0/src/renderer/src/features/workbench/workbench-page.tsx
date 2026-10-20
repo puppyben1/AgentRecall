@@ -232,7 +232,7 @@ export function WorkbenchPage({
       key: "cache-write",
       label: l("Cache write", "创建"),
       value: stats.total.cacheCreationInputTokens ?? 0,
-      delta: usageDelta(stats.total.cacheCreationInputTokens ?? 0, previousTotal?.cacheCreationInputTokens ?? null),
+      delta: usageDelta(stats.total.cacheCreationInputTokens ?? 0, previousTotal ? previousTotal.cacheCreationInputTokens ?? 0 : null),
     },
     {
       key: "cache-read",
