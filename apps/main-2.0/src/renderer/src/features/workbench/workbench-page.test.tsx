@@ -78,7 +78,15 @@ it("reports pending usage instead of zero before the first statistics arrive", (
   expect(pending).toContain('aria-label="Sessions: —"');
 
   const stale = renderToStaticMarkup(<WorkbenchPage {...workbenchProps({
-    stats: { ...usageStats, range: { period: "sevenDay", since: null, until: 0 } },
+    stats: { ...usageStats, bySource: [{ ...usageStats.total, source: "codex-cli", totalTokens: 1234 }], range: { period: "sevenDay", since: null, until: 0 } },
   })} />);
   expect(stale).toContain("Collecting usage...");
+  expect(stale).not.toContain('data-source="codex-cli"');
+
+  const failed = renderToStaticMarkup(<WorkbenchPage {...workbenchProps({
+    stats: null,
+    statsFeedback: { kind: "error", message: "statistics failed" },
+  })} />);
+  expect(failed).toContain("Usage unavailable. Try again.");
+  expect(failed).not.toContain("Collecting usage...");
 });

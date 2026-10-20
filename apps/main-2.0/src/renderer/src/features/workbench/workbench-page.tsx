@@ -227,9 +227,10 @@ export function WorkbenchPage({
 }: WorkbenchPageProps): ReactElement {
   const l = (en: string, zh: string) => localize(language, en, zh);
   // Numbers collected for another period must not be labelled with the selected one.
-  const usageLoading = stats === null || stats.range.period !== statsPeriod;
+  const usageFailed = statsFeedback?.kind === "error" && (stats === null || stats.range.period !== statsPeriod);
+  const usageLoading = !usageFailed && (stats === null || stats.range.period !== statsPeriod);
   const usage = stats ?? EMPTY_USAGE_STATS;
-  const sourceRows = usageStatsDisplayRows(usage.bySource);
+  const sourceRows = usageLoading || usageFailed ? [] : usageStatsDisplayRows(usage.bySource);
   const visibleSessions = sessionQuery.trim()
     ? sessions.slice(0, WORKBENCH_SESSION_LIMIT)
     : selectWorkbenchSessions(sessions, liveSessionKeys, liveDetectionFailed);
@@ -370,7 +371,11 @@ export function WorkbenchPage({
               <div key={row.key} className="workbench-source-row" data-source={row.key}>
                 <span><i />{row.label}</span><strong>{formatTokenCount(row.totalTokens)}</strong>
               </div>
-            )) : <span className="workbench-source-empty">{usageLoading ? l("Collecting usage...", "正在统计…") : l("No source data", "暂无来源数据")}</span>}
+            )) : <span className="workbench-source-empty">{usageLoading
+              ? l("Collecting usage...", "正在统计…")
+              : usageFailed
+                ? l("Usage unavailable. Try again.", "用量不可用，请重试。")
+                : l("No source data", "暂无来源数据")}</span>}
           </div>
           {statsFeedback ? <p className={`workbench-feedback ${statsFeedback.kind}`}>{statsFeedback.message}</p> : null}
         </div>
