@@ -94,6 +94,7 @@ describe("remote sync", () => {
     const childId = "child-session";
     const parentPath = path.join(tempHome, ".codex", "sessions", "2026", "08", "20", "parent.jsonl");
     const childPath = path.join(tempHome, ".codex", "sessions", "2026", "08", "20", "child.jsonl");
+    const guardianPath = path.join(tempHome, ".codex", "sessions", "2026", "08", "20", "guardian.jsonl");
     const sessionIdOnlyPath = path.join(tempHome, ".codex", "sessions", "2026", "08", "20", "session-id-only.jsonl");
     const writeJsonl = (filePath: string, rows: unknown[]) => {
       fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -187,6 +188,22 @@ describe("remote sync", () => {
           },
         },
       ]);
+      writeJsonl(guardianPath, [
+        {
+          type: "session_meta",
+          timestamp: "2026-08-20T06:34:30.000Z",
+          payload: {
+            id: "guardian-child",
+            cwd: "/workspace/guardian",
+            thread_source: "guardian_review",
+            parent_thread_id: parentId,
+          },
+        },
+        {
+          type: "response_item",
+          payload: { type: "message", role: "user", content: [{ type: "input_text", text: "guardian review" }] },
+        },
+      ]);
       fs.utimesSync(parentPath, new Date(2_000), new Date(2_000));
       fs.utimesSync(childPath, new Date(1_000), new Date(1_000));
 
@@ -218,6 +235,11 @@ describe("remote sync", () => {
         isSubagent: true,
         parentSessionId: parentId,
         timestamp: Date.parse("2026-08-20T06:33:00.000Z"),
+      });
+      await expect(store.getSession(`ssh:${environment.id}:codex-cli:guardian-child`)).resolves.toMatchObject({
+        rawId: "guardian-child",
+        isSubagent: true,
+        parentSessionId: parentId,
       });
       await expect(store.getSession(`ssh:${environment.id}:codex-cli:session-id-only`)).resolves.toMatchObject({
         rawId: "session-id-only",

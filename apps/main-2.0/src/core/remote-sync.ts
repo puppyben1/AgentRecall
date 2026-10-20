@@ -1315,7 +1315,7 @@ def emit_codex_summary(path, stat, titles, source):
                 if isinstance(thread_spawn, dict) and isinstance(thread_spawn.get("parent_thread_id"), str):
                   is_subagent = True
                   parent_session_id = parent_session_id or thread_spawn.get("parent_thread_id")
-              if payload.get("thread_source") == "subagent" and isinstance(payload.get("parent_thread_id"), str):
+              if payload.get("thread_source") in ("subagent", "guardian_review") and isinstance(payload.get("parent_thread_id"), str):
                 is_subagent = True
                 parent_session_id = parent_session_id or payload.get("parent_thread_id")
               parsed_timestamp = _iso_timestamp_ms(row.get("timestamp"))

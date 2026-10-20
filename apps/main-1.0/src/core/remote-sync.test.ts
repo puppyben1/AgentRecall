@@ -284,6 +284,19 @@ describe("remote sync", () => {
           payload: { id: parentId, cwd: "/repo/parent", source: "vscode" },
         },
       ]);
+      writeJsonl(path.join(tempHome, ".codex", "sessions", "2026", "08", "20", "guardian.jsonl"), [
+        {
+          type: "session_meta",
+          timestamp: childStartedAt,
+          payload: {
+            id: "guardian-child",
+            cwd: "/repo/guardian",
+            thread_source: "guardian_review",
+            parent_thread_id: parentId,
+          },
+        },
+        message("guardian review"),
+      ]);
       writeJsonl(path.join(tempHome, ".codex", "sessions", "2026", "08", "20", "session-id-only.jsonl"), [
         {
           type: "session_meta",
@@ -317,12 +330,17 @@ describe("remote sync", () => {
           parentSessionId: parentId,
         }),
         expect.objectContaining({
+          sessionKey: "ssh:ssh-devbox:codex-cli:guardian-child",
+          isSubagent: true,
+          parentSessionId: parentId,
+        }),
+        expect.objectContaining({
           sessionKey: "ssh:ssh-devbox:codex-cli:session-id-only",
           rawId: "session-id-only",
           projectPath: "/repo/legacy",
         }),
       ]));
-      expect(sessions).toHaveLength(3);
+      expect(sessions).toHaveLength(4);
       expect(store.getSession("ssh:ssh-devbox:codex-cli:semantic-session-id")).toBeNull();
     } finally {
       store.close();
